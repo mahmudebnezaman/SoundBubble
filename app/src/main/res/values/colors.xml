@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#1A1A2E</color>
+
+    <!-- Brand palette -->
+    <color name="brand_primary">#4F6EF7</color>
+    <color name="brand_primary_dark">#3B5BDB</color>
+    <color name="brand_surface_dark">#0F1123</color>
+    <color name="brand_surface">#161830</color>
+    <color name="brand_card">#1E2044</color>
+</resources>

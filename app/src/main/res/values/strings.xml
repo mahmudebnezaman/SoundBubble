@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SoundBubble</string>
+    <string name="bubble_service_channel_name">Bubble Service</string>
+    <string name="bubble_service_channel_desc">Keeps the floating bubble active</string>
+    <string name="bubble_service_notification_title">SoundBubble is active</string>
+    <string name="bubble_service_notification_text">Tap to open settings</string>
+    <string name="start_bubble">Start Bubble</string>
+    <string name="stop_bubble">Stop Bubble</string>
+    <string name="bubble_settings">Bubble Settings</string>
+    <string name="permission_required">Permission Required</string>
+    <string name="overlay_permission_title">Draw Over Other Apps</string>
+    <string name="overlay_permission_desc">SoundBubble needs permission to display the floating bubble over other apps.</string>
+    <string name="grant_permission">Grant Permission</string>
+    <string name="permission_granted">Permission Granted</string>
+    <string name="opacity">Opacity</string>
+    <string name="size">Size</string>
+    <string name="color">Color</string>
+    <string name="ring">Ring</string>
+    <string name="media">Media</string>
+    <string name="alarm">Alarm</string>
+    <string name="call">Call</string>
+    <string name="notification">Notification</string>
+    <string name="ringer_mode">Ringer Mode</string>
+    <string name="mode_ring">Ring</string>
+    <string name="mode_vibrate">Vibrate</string>
+    <string name="mode_silent">Silent</string>
+</resources>
