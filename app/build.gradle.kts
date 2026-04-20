@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.soundbubble"
+    namespace = "com.codezamlabs.soundbubble"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.soundbubble"
+        applicationId = "com.codezamlabs.soundbubble"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -20,7 +20,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
