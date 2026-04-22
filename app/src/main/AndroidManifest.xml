@@ -11,6 +11,7 @@
 
     <application
         android:name="com.codezamlabs.soundbubble.SoundBubbleApp"
+        android:appCategory="audio"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
