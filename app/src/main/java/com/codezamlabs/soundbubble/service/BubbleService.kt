@@ -123,18 +123,24 @@ class BubbleService : Service() {
     private fun createBubble() {
         val wm = windowManager ?: return
         val density = resources.displayMetrics.density
-        val defaultSizePx = (60 * density).toInt()
+        
+        // Add padding to the window size to accommodate the shadow blur
+        val visualPaddingPx = (12 * density).toInt()
+        val shadowPaddingPx = visualPaddingPx * 2
+        val defaultSizePx = (60 * density).toInt() + shadowPaddingPx
 
         val params = WindowManager.LayoutParams(
             defaultSizePx,
             defaultSizePx,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 0
+            // Initial X is negative visual padding so it touches the left edge
+            x = -visualPaddingPx
             y = 200
         }
 
@@ -176,15 +182,56 @@ class BubbleService : Service() {
         serviceScope.launch {
             settingsRepository.settingsFlow.collectLatest { settings ->
                 val density = resources.displayMetrics.density
-                val sizePx = (settings.size * density).toInt()
+                val visualPaddingPx = (12 * density).toInt()
+                val shadowPaddingPx = visualPaddingPx * 2
+                val sizePx = (settings.size * density).toInt() + shadowPaddingPx
+                val screenWidth = resources.displayMetrics.widthPixels
 
-                bubbleView?.updateColor(settings.color)
-                bubbleView?.updateOpacity(settings.opacity)
-                bubbleView?.updateSize(sizePx)
+                bubbleView?.apply {
+                    updateColor(settings.color)
+                    updateOpacity(settings.opacity)
+                }
 
                 layoutParams?.let { params ->
-                    params.x = settings.positionX
+                    val oldWidth = params.width
+                    val oldX = params.x
+                    
+                    // Detect if it was snapped to either edge before the size change
+                    val wasAtRightEdge = oldWidth > 0 && 
+                        Math.abs(oldX - (screenWidth - oldWidth + visualPaddingPx)) < 15
+                    val wasAtLeftEdge = oldWidth > 0 && 
+                        Math.abs(oldX - (-visualPaddingPx)) < 15
+
+                    params.width = sizePx
+                    params.height = sizePx
+
+                    when {
+                        wasAtRightEdge -> {
+                            // Keep attached to right edge
+                            params.x = screenWidth - sizePx + visualPaddingPx
+                        }
+                        wasAtLeftEdge || settings.positionX == 0 -> {
+                            // Keep attached to left edge
+                            params.x = -visualPaddingPx
+                        }
+                        else -> {
+                            // Grow from current position if in the middle
+                            params.x = settings.positionX
+                        }
+                    }
+                    
+                    // Update repository if the coordinate changed to keep it synced
+                    if (params.x != settings.positionX) {
+                        serviceScope.launch {
+                            settingsRepository.setPosition(params.x, settings.positionY)
+                        }
+                    }
+                    
                     params.y = settings.positionY
+                    params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+
                     bubbleView?.let { view ->
                         try {
                             windowManager?.updateViewLayout(view, params)

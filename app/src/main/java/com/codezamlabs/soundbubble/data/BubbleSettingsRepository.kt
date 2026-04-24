@@ -17,9 +17,9 @@ import javax.inject.Singleton
 val Context.bubbleDataStore: DataStore<Preferences> by preferencesDataStore(name = "bubble_settings")
 
 data class BubbleSettings(
-    val opacity: Float = 0.9f,
+    val opacity: Float = 0.5f,
     val size: Float = 60f,
-    val color: Int = 0xFF6750A4.toInt(),
+    val color: Int = 0xFF1E293B.toInt(),
     val positionX: Int = 0,
     val positionY: Int = 200,
     val serviceEnabled: Boolean = false,
@@ -40,9 +40,9 @@ class BubbleSettingsRepository @Inject constructor(
 
     val settingsFlow: Flow<BubbleSettings> = context.bubbleDataStore.data.map { prefs ->
         BubbleSettings(
-            opacity = prefs[Keys.BUBBLE_OPACITY] ?: 0.9f,
+            opacity = prefs[Keys.BUBBLE_OPACITY] ?: 0.5f,
             size = prefs[Keys.BUBBLE_SIZE] ?: 60f,
-            color = prefs[Keys.BUBBLE_COLOR] ?: 0xFF6750A4.toInt(),
+            color = prefs[Keys.BUBBLE_COLOR] ?: 0xFF1E293B.toInt(),
             positionX = prefs[Keys.BUBBLE_X] ?: 0,
             positionY = prefs[Keys.BUBBLE_Y] ?: 200,
             serviceEnabled = prefs[Keys.SERVICE_ENABLED] ?: false,
@@ -50,7 +50,7 @@ class BubbleSettingsRepository @Inject constructor(
     }
 
     val opacityFlow: Flow<Float> = context.bubbleDataStore.data.map { prefs ->
-        prefs[Keys.BUBBLE_OPACITY] ?: 0.9f
+        prefs[Keys.BUBBLE_OPACITY] ?: 0.5f
     }
 
     val sizeFlow: Flow<Float> = context.bubbleDataStore.data.map { prefs ->
@@ -58,7 +58,7 @@ class BubbleSettingsRepository @Inject constructor(
     }
 
     val colorFlow: Flow<Int> = context.bubbleDataStore.data.map { prefs ->
-        prefs[Keys.BUBBLE_COLOR] ?: 0xFF6750A4.toInt()
+        prefs[Keys.BUBBLE_COLOR] ?: 0xFF1E293B.toInt()
     }
 
     val positionXFlow: Flow<Int> = context.bubbleDataStore.data.map { prefs ->

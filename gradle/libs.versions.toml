@@ -12,6 +12,7 @@ kotlinxCoroutinesAndroid = "1.10.2"
 lifecycle = "2.10.0"
 material = "1.13.0"
 navigationCompose = "2.9.7"
+playUpdate = "2.1.0"
 
 [libraries]
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
@@ -31,6 +32,8 @@ hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "dagger" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+play-app-update = { group = "com.google.android.play", name = "app-update", version.ref = "playUpdate" }
+play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playUpdate" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

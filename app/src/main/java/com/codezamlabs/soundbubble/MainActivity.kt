@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -92,10 +93,27 @@ import com.codezamlabs.soundbubble.ui.theme.StreamNotificationColor
 import com.codezamlabs.soundbubble.ui.theme.StreamRingColor
 import com.codezamlabs.soundbubble.viewmodel.MainViewModel
 import com.codezamlabs.soundbubble.viewmodel.VolumeState
+import com.google.android.play.core.appupdate.AppUpdateManager
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateOptions
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.UpdateAvailability
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    private lateinit var appUpdateManager: AppUpdateManager
+
+    private val updateResultLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode != RESULT_OK) {
+            // If the update is cancelled or fails, 
+            // you can request to start the update again.
+            Toast.makeText(this, "Update failed or cancelled", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -103,6 +121,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        appUpdateManager = AppUpdateManagerFactory.create(this)
+        checkForUpdates()
         enableEdgeToEdge()
         requestNotificationPermissionIfNeeded()
         setContent {
@@ -120,6 +140,36 @@ class MainActivity : ComponentActivity() {
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    private fun checkForUpdates() {
+        val appUpdateInfoTask = appUpdateManager.appUpdateInfo
+
+        appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
+            if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+                && appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+            ) {
+                appUpdateManager.startUpdateFlowForResult(
+                    appUpdateInfo,
+                    updateResultLauncher,
+                    AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build()
+                )
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
+            if (appUpdateInfo.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
+                // If an in-app update is already running, resume the update.
+                appUpdateManager.startUpdateFlowForResult(
+                    appUpdateInfo,
+                    updateResultLauncher,
+                    AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build()
+                )
             }
         }
     }

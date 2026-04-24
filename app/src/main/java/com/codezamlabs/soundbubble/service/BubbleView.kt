@@ -22,6 +22,7 @@ class BubbleView(
 ) : View(context) {
 
     private val density = resources.displayMetrics.density
+    private val visualPadding = 12f * density
 
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
@@ -87,9 +88,11 @@ class BubbleView(
         super.onDraw(canvas)
         val cx = width / 2f
         val cy = height / 2f
-        val radius = minOf(cx, cy) * 0.88f
+        
+        // Use a radius that leaves room for the shadow blur within the view bounds
+        val radius = (width / 2f) - visualPadding
 
-        // Drop shadow
+        // Drop shadow - drawn first
         canvas.drawCircle(cx + 1.5f * density, cy + 2.5f * density, radius, shadowPaint)
 
         // Main circle
@@ -157,7 +160,14 @@ class BubbleView(
     private fun snapToEdge() {
         val bubbleWidth = layoutParams.width
         val bubbleCenterX = layoutParams.x + bubbleWidth / 2
-        val targetX = if (bubbleCenterX < screenWidth / 2) 0 else screenWidth - bubbleWidth
+        
+        // Offset the target X so the visual edge of the bubble touches the screen edge
+        // We use FLAG_LAYOUT_NO_LIMITS in BubbleService to allow these offsets
+        val targetX = if (bubbleCenterX < screenWidth / 2) {
+            -visualPadding.toInt()
+        } else {
+            screenWidth - bubbleWidth + visualPadding.toInt()
+        }
 
         snapAnimator?.cancel()
         snapAnimator = ValueAnimator.ofInt(layoutParams.x, targetX).apply {
