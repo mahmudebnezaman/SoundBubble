@@ -1,16 +1,22 @@
 package com.codezamlabs.soundbubble.service
 
+import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.RectF
+import android.os.Handler
+import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import androidx.appcompat.content.res.AppCompatResources
 import com.codezamlabs.soundbubble.R
+import com.codezamlabs.soundbubble.data.BubbleShape
 import kotlin.math.abs
 
 class BubbleView(
@@ -35,11 +41,6 @@ class BubbleView(
         color = 0xFF4F6EF7.toInt()
     }
 
-    private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-        color = 0x18FFFFFF
-    }
-
     private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 1.5f * density
@@ -57,8 +58,25 @@ class BubbleView(
     private var hasMoved = false
     private var snapAnimator: ValueAnimator? = null
 
+    var bubbleShape: BubbleShape = BubbleShape.CIRCLE
+    var buttonThickness: Float = 0.5f
+
+    private var configuredOpacity: Float = 1.0f
+    private var snappedToRight = false
+
+    private val inactivityHandler = Handler(Looper.getMainLooper())
+    private var fadeOutRunnable: Runnable? = null
+    private var inactivityAlphaAnimator: ObjectAnimator? = null
+    private var inactivitySlideAnimator: ValueAnimator? = null
+    private var activeSlideAnimator: ValueAnimator? = null
+
     private val screenWidth: Int
         get() = resources.displayMetrics.widthPixels
+
+    // Width of the vertical pill in px — used both for drawing and half-visible slide calculation
+    private val pillWidthPx: Float
+        get() = ((layoutParams.width - 2 * visualPadding) * buttonThickness)
+            .coerceAtLeast(density * 10)
 
     init {
         setLayerType(LAYER_TYPE_SOFTWARE, null)
@@ -70,17 +88,36 @@ class BubbleView(
     }
 
     fun updateOpacity(opacity: Float) {
-        alpha = opacity.coerceIn(0.2f, 1.0f)
+        configuredOpacity = opacity.coerceIn(0.2f, 1.0f)
+        alpha = configuredOpacity
+        scheduleInactivityFade()
     }
 
     fun updateSize(sizePx: Int) {
         layoutParams.width = sizePx
         layoutParams.height = sizePx
-        try {
-            windowManager.updateViewLayout(this, layoutParams)
-        } catch (e: IllegalArgumentException) {
-            // View not attached
+        updateViewLayout()
+        invalidate()
+    }
+
+    fun updateShape(shape: BubbleShape) {
+        cancelInactivityAnimations()
+        activeSlideAnimator?.cancel()
+        bubbleShape = shape
+        invalidate()
+        // Reset to active edge so the service's wasAtLeftEdge/wasAtRightEdge check passes
+        // correctly. This also fixes BUTTON-half-visible → CIRCLE showing half off-screen.
+        layoutParams.x = if (snappedToRight) {
+            screenWidth - layoutParams.width + visualPadding.toInt()
+        } else {
+            -visualPadding.toInt()
         }
+        updateViewLayout()
+        scheduleInactivityFade()
+    }
+
+    fun updateThickness(thickness: Float) {
+        buttonThickness = thickness.coerceIn(0.3f, 0.7f)
         invalidate()
     }
 
@@ -88,20 +125,20 @@ class BubbleView(
         super.onDraw(canvas)
         val cx = width / 2f
         val cy = height / 2f
-        
-        // Use a radius that leaves room for the shadow blur within the view bounds
+
+        when (bubbleShape) {
+            BubbleShape.CIRCLE -> drawCircleBubble(canvas, cx, cy)
+            BubbleShape.BUTTON -> drawPillBubble(canvas, cx, cy)
+        }
+    }
+
+    private fun drawCircleBubble(canvas: Canvas, cx: Float, cy: Float) {
         val radius = (width / 2f) - visualPadding
 
-        // Drop shadow - drawn first
         canvas.drawCircle(cx + 1.5f * density, cy + 2.5f * density, radius, shadowPaint)
-
-        // Main circle
         canvas.drawCircle(cx, cy, radius, paint)
-
-        // Glass border ring
         canvas.drawCircle(cx, cy, radius - borderPaint.strokeWidth / 2f, borderPaint)
 
-        // Draw the vector drawable icon — 45% of bubble diameter
         speakerDrawable?.let { drawable ->
             val iconSize = (radius * 2f * 0.45f).toInt()
             val left = (cx - iconSize / 2f).toInt()
@@ -111,10 +148,47 @@ class BubbleView(
         }
     }
 
+    private fun drawPillBubble(canvas: Canvas, cx: Float, cy: Float) {
+        // Vertical pill: height > width
+        val pillH = height - 2 * visualPadding
+        val pillW = (width - 2 * visualPadding) * buttonThickness.coerceIn(0.3f, 0.7f)
+        val cornerRadius = pillW / 2f
+
+        // Edge-align the pill so it sits flush with the screen edge (no gap).
+        // Left snap: pill left edge at visualPadding within view → flush with screen left.
+        // Right snap: pill right edge at (width - visualPadding) → flush with screen right.
+        val pillCx = if (snappedToRight) width - visualPadding - pillW / 2f
+                     else visualPadding + pillW / 2f
+
+        val shadowRect = RectF(
+            pillCx - pillW / 2f + 1.5f * density,
+            cy - pillH / 2f + 2.5f * density,
+            pillCx + pillW / 2f + 1.5f * density,
+            cy + pillH / 2f + 2.5f * density,
+        )
+        canvas.drawRoundRect(shadowRect, cornerRadius, cornerRadius, shadowPaint)
+
+        val pillRect = RectF(pillCx - pillW / 2f, cy - pillH / 2f, pillCx + pillW / 2f, cy + pillH / 2f)
+        canvas.drawRoundRect(pillRect, cornerRadius, cornerRadius, paint)
+
+        val inset = borderPaint.strokeWidth / 2f
+        val borderRect = RectF(
+            pillRect.left + inset,
+            pillRect.top + inset,
+            pillRect.right - inset,
+            pillRect.bottom - inset,
+        )
+        canvas.drawRoundRect(borderRect, cornerRadius - inset, cornerRadius - inset, borderPaint)
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                animateToActive()
+                cancelInactivityAnimations()
                 snapAnimator?.cancel()
+                // Do NOT cancel activeSlideAnimator here — let the slide-back complete on tap.
+                // It will be cancelled in ACTION_MOVE if the user actually drags.
                 initialX = layoutParams.x
                 initialY = layoutParams.y
                 initialTouchX = event.rawX
@@ -129,16 +203,13 @@ class BubbleView(
                 val dy = event.rawY - initialTouchY
                 if (!hasMoved && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
                     hasMoved = true
+                    activeSlideAnimator?.cancel()  // drag overrides the slide-back
                     animate().scaleX(1.05f).scaleY(1.05f).setDuration(100).start()
                 }
                 if (hasMoved) {
                     layoutParams.x = initialX + dx.toInt()
                     layoutParams.y = initialY + dy.toInt()
-                    try {
-                        windowManager.updateViewLayout(this, layoutParams)
-                    } catch (e: IllegalArgumentException) {
-                        // View not attached
-                    }
+                    updateViewLayout()
                 }
                 return true
             }
@@ -151,6 +222,7 @@ class BubbleView(
                     snapToEdge()
                     onDragEnd(layoutParams.x, layoutParams.y)
                 }
+                scheduleInactivityFade()
                 return true
             }
         }
@@ -160,13 +232,12 @@ class BubbleView(
     private fun snapToEdge() {
         val bubbleWidth = layoutParams.width
         val bubbleCenterX = layoutParams.x + bubbleWidth / 2
-        
-        // Offset the target X so the visual edge of the bubble touches the screen edge
-        // We use FLAG_LAYOUT_NO_LIMITS in BubbleService to allow these offsets
-        val targetX = if (bubbleCenterX < screenWidth / 2) {
-            -visualPadding.toInt()
-        } else {
+        snappedToRight = bubbleCenterX >= screenWidth / 2
+
+        val targetX = if (snappedToRight) {
             screenWidth - bubbleWidth + visualPadding.toInt()
+        } else {
+            -visualPadding.toInt()
         }
 
         snapAnimator?.cancel()
@@ -175,13 +246,119 @@ class BubbleView(
             interpolator = OvershootInterpolator(1.2f)
             addUpdateListener { animator ->
                 layoutParams.x = animator.animatedValue as Int
-                try {
-                    windowManager.updateViewLayout(this@BubbleView, layoutParams)
-                } catch (e: IllegalArgumentException) {
-                    // View not attached
-                }
+                updateViewLayout()
             }
             start()
+        }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // Determine which edge we're snapped to from the initial position
+        val bubbleCenterX = layoutParams.x + layoutParams.width / 2
+        snappedToRight = bubbleCenterX >= screenWidth / 2
+        scheduleInactivityFade()
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        cancelInactivityAnimations()
+        activeSlideAnimator?.cancel()
+    }
+
+    private fun scheduleInactivityFade() {
+        cancelInactivityAnimations()
+        fadeOutRunnable = Runnable { animateToInactive() }
+        inactivityHandler.postDelayed(fadeOutRunnable!!, 4000L)
+    }
+
+    private fun cancelInactivityAnimations() {
+        fadeOutRunnable?.let { inactivityHandler.removeCallbacks(it) }
+        fadeOutRunnable = null
+        inactivityAlphaAnimator?.cancel()
+        inactivitySlideAnimator?.cancel()
+    }
+
+    private fun animateToInactive() {
+        inactivityAlphaAnimator = ObjectAnimator.ofFloat(
+            this, "alpha", alpha, configuredOpacity * 0.35f,
+        ).apply { duration = 300; start() }
+
+        // BUTTON shape: slide half off the screen edge for a "drawer tab" feel
+        if (bubbleShape == BubbleShape.BUTTON) {
+            val targetX = getHalfVisibleX()
+            inactivitySlideAnimator = ValueAnimator.ofInt(layoutParams.x, targetX).apply {
+                duration = 500
+                interpolator = DecelerateInterpolator()
+                addUpdateListener {
+                    layoutParams.x = animatedValue as Int
+                    updateViewLayout()
+                }
+                start()
+            }
+        }
+    }
+
+    private fun animateToActive() {
+        cancelInactivityAnimations()
+        activeSlideAnimator?.cancel()
+
+        ObjectAnimator.ofFloat(this, "alpha", alpha, configuredOpacity).apply {
+            duration = 150
+            start()
+        }
+
+        // BUTTON shape: slide back to the full edge position
+        if (bubbleShape == BubbleShape.BUTTON) {
+            val targetX = getActiveEdgeX()
+            if (layoutParams.x != targetX) {
+                activeSlideAnimator = ValueAnimator.ofInt(layoutParams.x, targetX).apply {
+                    duration = 220
+                    interpolator = DecelerateInterpolator()
+                    addUpdateListener {
+                        layoutParams.x = animatedValue as Int
+                        updateViewLayout()
+                    }
+                    start()
+                }
+            }
+        }
+    }
+
+    /**
+     * Half-visible x: positions the pill so exactly half of it peeks out from the screen edge.
+     * For BUTTON: pill is edge-aligned, so its center is at (visualPadding + pillW/2) within the view.
+     * Putting that center at the screen edge gives the drawer-tab effect.
+     * For CIRCLE: view center at screen edge → half circle visible.
+     */
+    private fun getHalfVisibleX(): Int {
+        val vw = layoutParams.width
+        return if (bubbleShape == BubbleShape.BUTTON) {
+            val pw = pillWidthPx
+            if (snappedToRight) {
+                (screenWidth - vw + visualPadding + pw / 2f).toInt()
+            } else {
+                -(visualPadding + pw / 2f).toInt()
+            }
+        } else {
+            if (snappedToRight) screenWidth - vw / 2 else -vw / 2
+        }
+    }
+
+    private fun getActiveEdgeX(): Int {
+        val vw = layoutParams.width
+        return if (snappedToRight) {
+            screenWidth - vw + visualPadding.toInt()
+        } else {
+            -visualPadding.toInt()
+        }
+    }
+
+    private fun updateViewLayout() {
+        try {
+            windowManager.updateViewLayout(this, layoutParams)
+        } catch (e: IllegalArgumentException) {
+            // View not attached
         }
     }
 }

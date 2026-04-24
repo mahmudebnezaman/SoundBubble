@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codezamlabs.soundbubble.data.BubbleSettings
 import com.codezamlabs.soundbubble.data.BubbleSettingsRepository
+import com.codezamlabs.soundbubble.data.BubbleShape
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +39,18 @@ class BubbleSettingsViewModel @Inject constructor(
     fun setColor(value: Int) {
         viewModelScope.launch {
             settingsRepository.setColor(value)
+        }
+    }
+
+    fun setShape(shape: BubbleShape) {
+        viewModelScope.launch {
+            settingsRepository.setShape(shape)
+        }
+    }
+
+    fun setButtonThickness(value: Float) {
+        viewModelScope.launch {
+            settingsRepository.setButtonThickness(value)
         }
     }
 }

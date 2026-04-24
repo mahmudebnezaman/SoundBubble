@@ -190,6 +190,8 @@ class BubbleService : Service() {
                 bubbleView?.apply {
                     updateColor(settings.color)
                     updateOpacity(settings.opacity)
+                    updateShape(settings.shape)
+                    updateThickness(settings.buttonThickness)
                 }
 
                 layoutParams?.let { params ->

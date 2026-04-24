@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +24,8 @@ data class BubbleSettings(
     val positionX: Int = 0,
     val positionY: Int = 200,
     val serviceEnabled: Boolean = false,
+    val shape: BubbleShape = BubbleShape.CIRCLE,
+    val buttonThickness: Float = 0.5f,
 )
 
 @Singleton
@@ -36,6 +39,8 @@ class BubbleSettingsRepository @Inject constructor(
         val BUBBLE_X = intPreferencesKey("bubble_x")
         val BUBBLE_Y = intPreferencesKey("bubble_y")
         val SERVICE_ENABLED = booleanPreferencesKey("service_enabled")
+        val BUBBLE_SHAPE = stringPreferencesKey("bubble_shape")
+        val BUTTON_THICKNESS = floatPreferencesKey("button_thickness")
     }
 
     val settingsFlow: Flow<BubbleSettings> = context.bubbleDataStore.data.map { prefs ->
@@ -46,6 +51,10 @@ class BubbleSettingsRepository @Inject constructor(
             positionX = prefs[Keys.BUBBLE_X] ?: 0,
             positionY = prefs[Keys.BUBBLE_Y] ?: 200,
             serviceEnabled = prefs[Keys.SERVICE_ENABLED] ?: false,
+            shape = runCatching {
+                BubbleShape.valueOf(prefs[Keys.BUBBLE_SHAPE] ?: BubbleShape.CIRCLE.name)
+            }.getOrDefault(BubbleShape.CIRCLE),
+            buttonThickness = prefs[Keys.BUTTON_THICKNESS] ?: 0.5f,
         )
     }
 
@@ -94,5 +103,13 @@ class BubbleSettingsRepository @Inject constructor(
 
     suspend fun setServiceEnabled(enabled: Boolean) {
         context.bubbleDataStore.edit { it[Keys.SERVICE_ENABLED] = enabled }
+    }
+
+    suspend fun setShape(shape: BubbleShape) {
+        context.bubbleDataStore.edit { it[Keys.BUBBLE_SHAPE] = shape.name }
+    }
+
+    suspend fun setButtonThickness(value: Float) {
+        context.bubbleDataStore.edit { it[Keys.BUTTON_THICKNESS] = value.coerceIn(0.3f, 0.7f) }
     }
 }

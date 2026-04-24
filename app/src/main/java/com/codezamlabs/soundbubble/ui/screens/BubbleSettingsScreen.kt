@@ -1,7 +1,10 @@
 package com.codezamlabs.soundbubble.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.codezamlabs.soundbubble.data.BubbleShape
 import com.codezamlabs.soundbubble.ui.theme.BubblePresetColors
 import com.codezamlabs.soundbubble.viewmodel.BubbleSettingsViewModel
 
@@ -128,34 +132,46 @@ fun BubbleSettingsScreen(
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
+                    val isButton = settings.shape == BubbleShape.BUTTON
+                    val previewHeight = settings.size.dp
+                    // Vertical pill: width driven by thickness, height = bubble size
+                    val pillWidthDp = ((settings.size - 24) * settings.buttonThickness)
+                        .coerceAtLeast(10f)
+                    val previewWidth = if (isButton) pillWidthDp.dp else settings.size.dp
+                    val previewShape = if (isButton) RoundedCornerShape(50) else CircleShape
+
                     // Shadow behind preview bubble
                     Box(
                         modifier = Modifier
-                            .size((settings.size + 4).dp)
+                            .width(previewWidth + 4.dp)
+                            .height(previewHeight + 4.dp)
                             .alpha(0.2f)
-                            .clip(CircleShape)
+                            .clip(previewShape)
                             .background(bubbleColor),
                     )
                     // Preview bubble
                     Box(
                         modifier = Modifier
-                            .size(settings.size.dp)
+                            .width(previewWidth)
+                            .height(previewHeight)
                             .alpha(settings.opacity)
-                            .clip(CircleShape)
+                            .clip(previewShape)
                             .background(bubbleColor)
                             .border(
                                 width = 1.5.dp,
                                 color = Color.White.copy(alpha = 0.2f),
-                                shape = CircleShape,
+                                shape = previewShape,
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.VolumeUp,
-                            contentDescription = null,
-                            modifier = Modifier.size((settings.size * 0.45f).dp),
-                            tint = Color.White,
-                        )
+                        if (!isButton) {
+                            Icon(
+                                imageVector = Icons.Filled.VolumeUp,
+                                contentDescription = null,
+                                modifier = Modifier.size((settings.size * 0.45f).dp),
+                                tint = Color.White,
+                            )
+                        }
                     }
                 }
             }
@@ -199,6 +215,40 @@ fun BubbleSettingsScreen(
                     ),
                 )
             }
+
+            AnimatedVisibility(
+                visible = settings.shape == BubbleShape.BUTTON,
+                enter = expandVertically(),
+                exit = shrinkVertically(),
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    SettingSection(
+                        title = "Thickness",
+                        value = "${(settings.buttonThickness * 100).toInt()}%",
+                    ) {
+                        Slider(
+                            value = settings.buttonThickness,
+                            onValueChange = { viewModel.setButtonThickness(it) },
+                            valueRange = 0.3f..0.7f,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            ),
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Shape Selector
+            ShapeSelector(
+                selectedShape = settings.shape,
+                onShapeSelected = { viewModel.setShape(it) },
+            )
 
             Spacer(modifier = Modifier.height(28.dp))
 
@@ -325,6 +375,90 @@ fun BubbleSettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(40.dp))
+        }
+    }
+}
+
+@Composable
+private fun ShapeSelector(
+    selectedShape: BubbleShape,
+    onShapeSelected: (BubbleShape) -> Unit,
+) {
+    SettingSection(title = "Shape", value = if (selectedShape == BubbleShape.CIRCLE) "Circle" else "Button") {
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            BubbleShape.entries.forEach { shape ->
+                val isSelected = shape == selectedShape
+                val bgColor = if (isSelected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                } else {
+                    Color.Transparent
+                }
+                val borderColor = if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                }
+                val borderWidth = if (isSelected) 2.dp else 1.dp
+                val label = if (shape == BubbleShape.CIRCLE) "Circle" else "Button"
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(bgColor)
+                        .border(borderWidth, borderColor, RoundedCornerShape(12.dp))
+                        .clickable { onShapeSelected(shape) }
+                        .padding(vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (shape == BubbleShape.CIRCLE) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.VolumeUp,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = Color.White,
+                            )
+                        }
+                    } else {
+                        // Vertical pill preview
+                        Box(
+                            modifier = Modifier
+                                .width(18.dp)
+                                .height(40.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                ),
+                        )
+                    }
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                }
+            }
         }
     }
 }
