@@ -30,7 +30,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -217,6 +221,7 @@ fun MainScreen(
     }
 
     val primaryColor = MaterialTheme.colorScheme.primary
+    val isWideLayout = LocalConfiguration.current.screenWidthDp >= 600
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -238,42 +243,34 @@ fun MainScreen(
             )
         },
     ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(bottom = 32.dp),
-        ) {
-            // Hero Header with gradient glow
-            item {
-                Box(
+        if (isWideLayout) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+            ) {
+                // Left pane: compact hero + permission banner + ringer mode
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 28.dp),
+                        .weight(0.45f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 32.dp),
                 ) {
-                    // Gradient glow behind icon
-                    Box(
-                        modifier = Modifier
-                            .size(160.dp)
-                            .align(Alignment.TopCenter)
-                            .offset(y = (-20).dp),
-                    )
-
+                    // Compact hero
                     Column(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        // Icon with subtle border ring
                         Box(
                             modifier = Modifier
-                                .size(80.dp)
+                                .size(64.dp)
                                 .clip(CircleShape)
                                 .background(
                                     brush = Brush.linearGradient(
-                                        colors = listOf(
-                                            primaryColor,
-                                            primaryColor.copy(alpha = 0.7f),
-                                        ),
+                                        colors = listOf(primaryColor, primaryColor.copy(alpha = 0.7f)),
                                     ),
                                 )
                                 .border(
@@ -291,14 +288,14 @@ fun MainScreen(
                             Icon(
                                 imageVector = Icons.Filled.VolumeUp,
                                 contentDescription = null,
-                                modifier = Modifier.size(40.dp),
+                                modifier = Modifier.size(32.dp),
                                 tint = Color.White,
                             )
                         }
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         Text(
                             text = "SoundBubble",
-                            style = MaterialTheme.typography.headlineLarge,
+                            style = MaterialTheme.typography.headlineMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
@@ -309,103 +306,255 @@ fun MainScreen(
                             letterSpacing = 2.sp,
                         )
                     }
-                }
-            }
 
-            // Permission Banner
-            if (!uiState.overlayPermissionGranted) {
-                item {
-                    Card(
-                        onClick = onNavigateToPermission,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp)
-                            .padding(bottom = 20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                    ) {
-                        Row(
+                    // Permission banner (no extra horizontal padding — pane provides it)
+                    if (!uiState.overlayPermissionGranted) {
+                        Card(
+                            onClick = onNavigateToPermission,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                .padding(bottom = 20.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Warning,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Overlay Permission Required",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                    )
+                                    Text(
+                                        text = "Tap to enable floating bubble",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f),
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    SectionLabel("Sound Profile")
+                    Spacer(modifier = Modifier.height(10.dp))
+                    RingerModeSelector(
+                        currentMode = uiState.ringerMode,
+                        onModeSelected = { viewModel.setRingerMode(context, it) },
+                    )
+                    Spacer(modifier = Modifier.height(28.dp))
+                    BubbleToggleButton(
+                        isRunning = uiState.serviceRunning,
+                        hasPermission = uiState.overlayPermissionGranted,
+                        onStart = { viewModel.startBubbleService(context) },
+                        onStop = { viewModel.stopBubbleService(context) },
+                        onRequestPermission = onNavigateToPermission,
+                    )
+                }
+
+                // Right pane: volume sliders
+                Column(
+                    modifier = Modifier
+                        .weight(0.55f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 12.dp, end = 20.dp, top = 16.dp, bottom = 32.dp),
+                ) {
+                    SectionLabel("Volume")
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        VolumeSliderCard("Ring", Icons.Filled.PhoneAndroid, StreamRingColor, uiState.volumes[StreamType.RING]) { viewModel.setVolume(StreamType.RING, it) }
+                        VolumeSliderCard("Media", Icons.Filled.MusicNote, StreamMediaColor, uiState.volumes[StreamType.MEDIA]) { viewModel.setVolume(StreamType.MEDIA, it) }
+                        VolumeSliderCard("Alarm", Icons.Filled.Alarm, StreamAlarmColor, uiState.volumes[StreamType.ALARM]) { viewModel.setVolume(StreamType.ALARM, it) }
+                        VolumeSliderCard("Call", Icons.Filled.Call, StreamCallColor, uiState.volumes[StreamType.CALL]) { viewModel.setVolume(StreamType.CALL, it) }
+                        VolumeSliderCard("Notification", Icons.Filled.Notifications, StreamNotificationColor, uiState.volumes[StreamType.NOTIFICATION]) { viewModel.setVolume(StreamType.NOTIFICATION, it) }
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentPadding = PaddingValues(bottom = 32.dp),
+            ) {
+                // Hero Header with gradient glow
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 28.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(160.dp)
+                                .align(Alignment.TopCenter)
+                                .offset(y = (-20).dp),
+                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f)),
+                                    .size(80.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(primaryColor, primaryColor.copy(alpha = 0.7f)),
+                                        ),
+                                    )
+                                    .border(
+                                        width = 2.dp,
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(
+                                                Color.White.copy(alpha = 0.3f),
+                                                Color.White.copy(alpha = 0.05f),
+                                            ),
+                                        ),
+                                        shape = CircleShape,
+                                    ),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
-                                    Icons.Filled.Warning,
+                                    imageVector = Icons.Filled.VolumeUp,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                                    modifier = Modifier.size(20.dp),
+                                    modifier = Modifier.size(40.dp),
+                                    tint = Color.White,
                                 )
                             }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Overlay Permission Required",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                )
-                                Text(
-                                    text = "Tap to enable floating bubble",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f),
-                                )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "SoundBubble",
+                                style = MaterialTheme.typography.headlineLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Volume Control",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                letterSpacing = 2.sp,
+                            )
+                        }
+                    }
+                }
+
+                // Permission Banner
+                if (!uiState.overlayPermissionGranted) {
+                    item {
+                        Card(
+                            onClick = onNavigateToPermission,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp)
+                                .padding(bottom = 20.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Warning,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Overlay Permission Required",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                    )
+                                    Text(
+                                        text = "Tap to enable floating bubble",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f),
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // Ringer Mode Card
-            item {
-                SectionLabel("Sound Profile", Modifier.padding(horizontal = 20.dp))
-                Spacer(modifier = Modifier.height(10.dp))
-                RingerModeSelector(
-                    currentMode = uiState.ringerMode,
-                    onModeSelected = { viewModel.setRingerMode(context, it) },
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                )
-                Spacer(modifier = Modifier.height(28.dp))
-            }
-
-            // Volume Controls
-            item {
-                SectionLabel("Volume", Modifier.padding(horizontal = 20.dp))
-                Spacer(modifier = Modifier.height(10.dp))
-            }
-
-            item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                ) {
-                    VolumeSliderCard("Ring", Icons.Filled.PhoneAndroid, StreamRingColor, uiState.volumes[StreamType.RING]) { viewModel.setVolume(StreamType.RING, it) }
-                    VolumeSliderCard("Media", Icons.Filled.MusicNote, StreamMediaColor, uiState.volumes[StreamType.MEDIA]) { viewModel.setVolume(StreamType.MEDIA, it) }
-                    VolumeSliderCard("Alarm", Icons.Filled.Alarm, StreamAlarmColor, uiState.volumes[StreamType.ALARM]) { viewModel.setVolume(StreamType.ALARM, it) }
-                    VolumeSliderCard("Call", Icons.Filled.Call, StreamCallColor, uiState.volumes[StreamType.CALL]) { viewModel.setVolume(StreamType.CALL, it) }
-                    VolumeSliderCard("Notification", Icons.Filled.Notifications, StreamNotificationColor, uiState.volumes[StreamType.NOTIFICATION]) { viewModel.setVolume(StreamType.NOTIFICATION, it) }
+                // Ringer Mode Card
+                item {
+                    SectionLabel("Sound Profile", Modifier.padding(horizontal = 20.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+                    RingerModeSelector(
+                        currentMode = uiState.ringerMode,
+                        onModeSelected = { viewModel.setRingerMode(context, it) },
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                    )
+                    Spacer(modifier = Modifier.height(28.dp))
                 }
-            }
 
-            // Bubble Toggle
-            item {
-                Spacer(modifier = Modifier.height(28.dp))
-                BubbleToggleButton(
-                    isRunning = uiState.serviceRunning,
-                    hasPermission = uiState.overlayPermissionGranted,
-                    onStart = { viewModel.startBubbleService(context) },
-                    onStop = { viewModel.stopBubbleService(context) },
-                    onRequestPermission = onNavigateToPermission,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                )
+                // Volume Controls
+                item {
+                    SectionLabel("Volume", Modifier.padding(horizontal = 20.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
+                item {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                    ) {
+                        VolumeSliderCard("Ring", Icons.Filled.PhoneAndroid, StreamRingColor, uiState.volumes[StreamType.RING]) { viewModel.setVolume(StreamType.RING, it) }
+                        VolumeSliderCard("Media", Icons.Filled.MusicNote, StreamMediaColor, uiState.volumes[StreamType.MEDIA]) { viewModel.setVolume(StreamType.MEDIA, it) }
+                        VolumeSliderCard("Alarm", Icons.Filled.Alarm, StreamAlarmColor, uiState.volumes[StreamType.ALARM]) { viewModel.setVolume(StreamType.ALARM, it) }
+                        VolumeSliderCard("Call", Icons.Filled.Call, StreamCallColor, uiState.volumes[StreamType.CALL]) { viewModel.setVolume(StreamType.CALL, it) }
+                        VolumeSliderCard("Notification", Icons.Filled.Notifications, StreamNotificationColor, uiState.volumes[StreamType.NOTIFICATION]) { viewModel.setVolume(StreamType.NOTIFICATION, it) }
+                    }
+                }
+
+                // Bubble Toggle
+                item {
+                    Spacer(modifier = Modifier.height(28.dp))
+                    BubbleToggleButton(
+                        isRunning = uiState.serviceRunning,
+                        hasPermission = uiState.overlayPermissionGranted,
+                        onStart = { viewModel.startBubbleService(context) },
+                        onStop = { viewModel.stopBubbleService(context) },
+                        onRequestPermission = onNavigateToPermission,
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                    )
+                }
             }
         }
     }

@@ -3,7 +3,9 @@
     "allow": [
       "WebSearch",
       "Bash(./gradlew assembleDebug)",
-      "Bash(gradle -p /Volumes/external/Project/soundbubble assembleDebug)"
+      "Bash(gradle -p /Volumes/external/Project/soundbubble assembleDebug)",
+      "Bash(gradle --version)",
+      "Bash(~/.gradle/wrapper/dists/gradle-9.4.1-bin/arn2x92ynaizyzdaamcbpbhtj/gradle-9.4.1/bin/gradle assembleDebug)"
     ]
   }
 }

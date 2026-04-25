@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.LocalConfiguration
+import com.codezamlabs.soundbubble.data.BubbleSettings
 import com.codezamlabs.soundbubble.data.BubbleShape
 import com.codezamlabs.soundbubble.ui.theme.BubblePresetColors
 import com.codezamlabs.soundbubble.viewmodel.BubbleSettingsViewModel
@@ -70,6 +73,7 @@ fun BubbleSettingsScreen(
     viewModel: BubbleSettingsViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val isWideLayout = LocalConfiguration.current.screenWidthDp >= 600
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -92,289 +96,320 @@ fun BubbleSettingsScreen(
             )
         },
     ) { paddingValues ->
-        Column(
+        val bubbleColor by animateColorAsState(
+            targetValue = Color(settings.color),
+            animationSpec = tween(300),
+            label = "previewColor",
+        )
+
+        if (isWideLayout) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+            ) {
+                // Left pane: Live preview + Shape selector
+                Column(
+                    modifier = Modifier
+                        .weight(0.42f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 32.dp),
+                ) {
+                    BubbleLivePreview(settings = settings, bubbleColor = bubbleColor)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    ShapeSelector(
+                        selectedShape = settings.shape,
+                        onShapeSelected = { viewModel.setShape(it) },
+                    )
+                }
+
+                // Right pane: Sliders + Color picker
+                Column(
+                    modifier = Modifier
+                        .weight(0.58f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 12.dp, end = 20.dp, top = 8.dp, bottom = 32.dp),
+                ) {
+                    BubbleSliders(settings = settings, viewModel = viewModel)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    BubbleColorPicker(settings = settings, viewModel = viewModel)
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(horizontal = 20.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
+                BubbleLivePreview(settings = settings, bubbleColor = bubbleColor)
+                Spacer(modifier = Modifier.height(28.dp))
+                BubbleSliders(settings = settings, viewModel = viewModel)
+                Spacer(modifier = Modifier.height(20.dp))
+                ShapeSelector(
+                    selectedShape = settings.shape,
+                    onShapeSelected = { viewModel.setShape(it) },
+                )
+                Spacer(modifier = Modifier.height(28.dp))
+                BubbleColorPicker(settings = settings, viewModel = viewModel)
+                Spacer(modifier = Modifier.height(40.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun BubbleLivePreview(
+    settings: BubbleSettings,
+    bubbleColor: Color,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+        ),
+    ) {
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Live Preview
-            val bubbleColor by animateColorAsState(
-                targetValue = Color(settings.color),
-                animationSpec = tween(300),
-                label = "previewColor",
-            )
-
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                .fillMaxWidth()
+                .height(160.dp)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            bubbleColor.copy(alpha = 0.08f),
+                            Color.Transparent,
+                        ),
+                        radius = 400f,
+                    ),
                 ),
+            contentAlignment = Alignment.Center,
+        ) {
+            val isButton = settings.shape == BubbleShape.BUTTON
+            val previewHeight = settings.size.dp
+            val pillWidthDp = ((settings.size - 24) * settings.buttonThickness).coerceAtLeast(10f)
+            val previewWidth = if (isButton) pillWidthDp.dp else settings.size.dp
+            val previewShape = if (isButton) RoundedCornerShape(50) else CircleShape
+
+            Box(
+                modifier = Modifier
+                    .width(previewWidth + 4.dp)
+                    .height(previewHeight + 4.dp)
+                    .alpha(0.2f)
+                    .clip(previewShape)
+                    .background(bubbleColor),
+            )
+            Box(
+                modifier = Modifier
+                    .width(previewWidth)
+                    .height(previewHeight)
+                    .alpha(settings.opacity)
+                    .clip(previewShape)
+                    .background(bubbleColor)
+                    .border(
+                        width = 1.5.dp,
+                        color = Color.White.copy(alpha = 0.2f),
+                        shape = previewShape,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (!isButton) {
+                    Icon(
+                        imageVector = Icons.Filled.VolumeUp,
+                        contentDescription = null,
+                        modifier = Modifier.size((settings.size * 0.45f).dp),
+                        tint = Color.White,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BubbleSliders(
+    settings: BubbleSettings,
+    viewModel: BubbleSettingsViewModel,
+) {
+    SettingSection(
+        title = "Opacity",
+        value = "${(settings.opacity * 100).toInt()}%",
+    ) {
+        Slider(
+            value = settings.opacity,
+            onValueChange = { viewModel.setOpacity(it) },
+            valueRange = 0.2f..1.0f,
+            modifier = Modifier.fillMaxWidth(),
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+            ),
+        )
+    }
+
+    Spacer(modifier = Modifier.height(20.dp))
+
+    SettingSection(
+        title = "Size",
+        value = "${settings.size.toInt()}dp",
+    ) {
+        Slider(
+            value = settings.size,
+            onValueChange = { viewModel.setSize(it) },
+            valueRange = 40f..100f,
+            modifier = Modifier.fillMaxWidth(),
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+            ),
+        )
+    }
+
+    AnimatedVisibility(
+        visible = settings.shape == BubbleShape.BUTTON,
+        enter = expandVertically(),
+        exit = shrinkVertically(),
+    ) {
+        Column {
+            Spacer(modifier = Modifier.height(20.dp))
+            SettingSection(
+                title = "Thickness",
+                value = "${(settings.buttonThickness * 100).toInt()}%",
+            ) {
+                Slider(
+                    value = settings.buttonThickness,
+                    onValueChange = { viewModel.setButtonThickness(it) },
+                    valueRange = 0.3f..0.7f,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                    ),
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BubbleColorPicker(
+    settings: BubbleSettings,
+    viewModel: BubbleSettingsViewModel,
+) {
+    Text(
+        text = "COLOR",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        letterSpacing = 1.5.sp,
+    )
+    Spacer(modifier = Modifier.height(14.dp))
+
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        BubblePresetColors.forEachIndexed { index, color ->
+            val isSelected = color.toArgb() == settings.color
+            val colorName = BubblePresetColorNames.getOrElse(index) { "" }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.width(52.dp),
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(160.dp)
-                        .background(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    bubbleColor.copy(alpha = 0.08f),
-                                    Color.Transparent,
-                                ),
-                                radius = 400f,
-                            ),
-                        ),
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                        .then(
+                            if (isSelected) {
+                                Modifier.border(width = 2.5.dp, color = Color.White, shape = CircleShape)
+                            } else {
+                                Modifier.border(width = 1.dp, color = Color.White.copy(alpha = 0.1f), shape = CircleShape)
+                            },
+                        )
+                        .clickable { viewModel.setColor(color.toArgb()) },
                     contentAlignment = Alignment.Center,
                 ) {
-                    val isButton = settings.shape == BubbleShape.BUTTON
-                    val previewHeight = settings.size.dp
-                    // Vertical pill: width driven by thickness, height = bubble size
-                    val pillWidthDp = ((settings.size - 24) * settings.buttonThickness)
-                        .coerceAtLeast(10f)
-                    val previewWidth = if (isButton) pillWidthDp.dp else settings.size.dp
-                    val previewShape = if (isButton) RoundedCornerShape(50) else CircleShape
-
-                    // Shadow behind preview bubble
-                    Box(
-                        modifier = Modifier
-                            .width(previewWidth + 4.dp)
-                            .height(previewHeight + 4.dp)
-                            .alpha(0.2f)
-                            .clip(previewShape)
-                            .background(bubbleColor),
-                    )
-                    // Preview bubble
-                    Box(
-                        modifier = Modifier
-                            .width(previewWidth)
-                            .height(previewHeight)
-                            .alpha(settings.opacity)
-                            .clip(previewShape)
-                            .background(bubbleColor)
-                            .border(
-                                width = 1.5.dp,
-                                color = Color.White.copy(alpha = 0.2f),
-                                shape = previewShape,
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (!isButton) {
-                            Icon(
-                                imageVector = Icons.Filled.VolumeUp,
-                                contentDescription = null,
-                                modifier = Modifier.size((settings.size * 0.45f).dp),
-                                tint = Color.White,
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // Opacity Control
-            SettingSection(
-                title = "Opacity",
-                value = "${(settings.opacity * 100).toInt()}%",
-            ) {
-                Slider(
-                    value = settings.opacity,
-                    onValueChange = { viewModel.setOpacity(it) },
-                    valueRange = 0.2f..1.0f,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    ),
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Size Control
-            SettingSection(
-                title = "Size",
-                value = "${settings.size.toInt()}dp",
-            ) {
-                Slider(
-                    value = settings.size,
-                    onValueChange = { viewModel.setSize(it) },
-                    valueRange = 40f..100f,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    ),
-                )
-            }
-
-            AnimatedVisibility(
-                visible = settings.shape == BubbleShape.BUTTON,
-                enter = expandVertically(),
-                exit = shrinkVertically(),
-            ) {
-                Column {
-                    Spacer(modifier = Modifier.height(20.dp))
-                    SettingSection(
-                        title = "Thickness",
-                        value = "${(settings.buttonThickness * 100).toInt()}%",
-                    ) {
-                        Slider(
-                            value = settings.buttonThickness,
-                            onValueChange = { viewModel.setButtonThickness(it) },
-                            valueRange = 0.3f..0.7f,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = SliderDefaults.colors(
-                                thumbColor = MaterialTheme.colorScheme.primary,
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
-                                inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                            ),
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Shape Selector
-            ShapeSelector(
-                selectedShape = settings.shape,
-                onShapeSelected = { viewModel.setShape(it) },
-            )
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // Color Picker
-            Text(
-                text = "COLOR",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                letterSpacing = 1.5.sp,
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                BubblePresetColors.forEachIndexed { index, color ->
-                    val isSelected = color.toArgb() == settings.color
-                    val colorName = BubblePresetColorNames.getOrElse(index) { "" }
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(52.dp),
-                    ) {
+                    if (isSelected) {
                         Box(
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(14.dp)
                                 .clip(CircleShape)
-                                .background(color)
-                                .then(
-                                    if (isSelected) {
-                                        Modifier.border(
-                                            width = 2.5.dp,
-                                            color = Color.White,
-                                            shape = CircleShape,
-                                        )
-                                    } else {
-                                        Modifier.border(
-                                            width = 1.dp,
-                                            color = Color.White.copy(alpha = 0.1f),
-                                            shape = CircleShape,
-                                        )
-                                    },
-                                )
-                                .clickable { viewModel.setColor(color.toArgb()) },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (isSelected) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(14.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.White),
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = colorName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isSelected) {
-                                MaterialTheme.colorScheme.onSurface
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            textAlign = TextAlign.Center,
-                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                .background(Color.White),
                         )
                     }
                 }
-
-                // Custom color option
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.width(52.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(
-                                brush = Brush.sweepGradient(
-                                    listOf(
-                                        Color(0xFFFF6B6B), Color(0xFFFFC93C), Color(0xFF6BCB77),
-                                        Color(0xFF4FC3F7), Color(0xFF7C4DFF), Color(0xFFFF6B6B),
-                                    ),
-                                ),
-                            )
-                            .then(
-                                if (BubblePresetColors.none { it.toArgb() == settings.color }) {
-                                    Modifier.border(2.5.dp, Color.White, CircleShape)
-                                } else {
-                                    Modifier.border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
-                                },
-                            )
-                            .clickable {
-                                val customColors = listOf(
-                                    0xFFFF5722.toInt(),
-                                    0xFF795548.toInt(),
-                                    0xFF009688.toInt(),
-                                    0xFF3F51B5.toInt(),
-                                    0xFFCDDC39.toInt(),
-                                )
-                                val currentIndex = customColors.indexOf(settings.color)
-                                val nextIndex = (currentIndex + 1) % customColors.size
-                                viewModel.setColor(customColors[nextIndex])
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = "+",
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Custom",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                    )
-                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = colorName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isSelected) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                )
             }
+        }
 
-            Spacer(modifier = Modifier.height(40.dp))
+        // Custom color option
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.width(52.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(
+                        brush = Brush.sweepGradient(
+                            listOf(
+                                Color(0xFFFF6B6B), Color(0xFFFFC93C), Color(0xFF6BCB77),
+                                Color(0xFF4FC3F7), Color(0xFF7C4DFF), Color(0xFFFF6B6B),
+                            ),
+                        ),
+                    )
+                    .then(
+                        if (BubblePresetColors.none { it.toArgb() == settings.color }) {
+                            Modifier.border(2.5.dp, Color.White, CircleShape)
+                        } else {
+                            Modifier.border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
+                        },
+                    )
+                    .clickable {
+                        val customColors = listOf(
+                            0xFFFF5722.toInt(), 0xFF795548.toInt(), 0xFF009688.toInt(),
+                            0xFF3F51B5.toInt(), 0xFFCDDC39.toInt(),
+                        )
+                        val currentIndex = customColors.indexOf(settings.color)
+                        val nextIndex = (currentIndex + 1) % customColors.size
+                        viewModel.setColor(customColors[nextIndex])
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "+",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Custom",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }

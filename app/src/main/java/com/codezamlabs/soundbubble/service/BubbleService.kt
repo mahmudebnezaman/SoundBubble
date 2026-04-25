@@ -75,6 +75,46 @@ class BubbleService : Service() {
         return START_STICKY
     }
 
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        repositionBubbleForNewOrientation()
+    }
+
+    private fun repositionBubbleForNewOrientation() {
+        val wm = windowManager ?: return
+        val view = bubbleView ?: return
+        val params = layoutParams ?: return
+
+        val displayMetrics = resources.displayMetrics
+        val newScreenWidth = displayMetrics.widthPixels
+        val newScreenHeight = displayMetrics.heightPixels
+        val density = displayMetrics.density
+        val visualPaddingPx = (12 * density).toInt()
+
+        // 1. Maintain horizontal snapping
+        // Use a threshold to see which side it was closer to
+        val wasOnRight = params.x + params.width / 2 > newScreenHeight / 2 // ScreenHeight because width/height swapped
+
+        if (wasOnRight) {
+            params.x = newScreenWidth - params.width + visualPaddingPx
+        } else {
+            params.x = -visualPaddingPx
+        }
+
+        // 2. Maintain vertical position within bounds
+        params.y = params.y.coerceIn(0, newScreenHeight - params.height)
+
+        try {
+            wm.updateViewLayout(view, params)
+            // Save the new corrected position
+            serviceScope.launch {
+                settingsRepository.setPosition(params.x, params.y)
+            }
+        } catch (e: IllegalArgumentException) {
+            // View not attached
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         removeBubble()
