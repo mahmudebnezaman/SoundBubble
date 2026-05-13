@@ -87,6 +87,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.codezamlabs.soundbubble.audio.StreamType
+import com.codezamlabs.soundbubble.ui.screens.BatteryOptimizationScreen
 import com.codezamlabs.soundbubble.ui.screens.BubbleSettingsScreen
 import com.codezamlabs.soundbubble.ui.screens.PermissionGuideScreen
 import com.codezamlabs.soundbubble.ui.theme.SoundBubbleTheme
@@ -188,6 +189,7 @@ fun SoundBubbleNavHost() {
             MainScreen(
                 onNavigateToSettings = { navController.navigate("bubble_settings") },
                 onNavigateToPermission = { navController.navigate("permission_guide") },
+                onNavigateToBattery = { navController.navigate("battery_optimization") },
             )
         }
         composable("bubble_settings") {
@@ -200,6 +202,11 @@ fun SoundBubbleNavHost() {
                 onNavigateBack = { navController.popBackStack() },
             )
         }
+        composable("battery_optimization") {
+            BatteryOptimizationScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
     }
 }
 
@@ -208,6 +215,7 @@ fun SoundBubbleNavHost() {
 fun MainScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToPermission: () -> Unit,
+    onNavigateToBattery: () -> Unit,
     viewModel: MainViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -313,7 +321,7 @@ fun MainScreen(
                             onClick = onNavigateToPermission,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 20.dp),
+                                .padding(bottom = 12.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.errorContainer,
                             ),
@@ -350,6 +358,54 @@ fun MainScreen(
                                         text = "Tap to enable floating bubble",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f),
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (uiState.isBatteryOptimized) {
+                        Card(
+                            onClick = onNavigateToBattery,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 20.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Settings,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Battery Optimization Active",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    )
+                                    Text(
+                                        text = "Tap to prevent bubble turning off",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
                                     )
                                 }
                             }
@@ -468,7 +524,7 @@ fun MainScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 20.dp)
-                                .padding(bottom = 20.dp),
+                                .padding(bottom = 12.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.errorContainer,
                             ),
@@ -505,6 +561,57 @@ fun MainScreen(
                                         text = "Tap to enable floating bubble",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (uiState.isBatteryOptimized) {
+                    item {
+                        Card(
+                            onClick = onNavigateToBattery,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp)
+                                .padding(bottom = 20.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Settings,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Battery Optimization Active",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    )
+                                    Text(
+                                        text = "Tap to prevent bubble turning off",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
                                     )
                                 }
                             }

@@ -28,6 +28,8 @@ data class MainUiState(
     val serviceRunning: Boolean = false,
     val overlayPermissionGranted: Boolean = false,
     val needsDndAccess: Boolean = false,
+    val isBatteryOptimized: Boolean = false,
+    val serviceShouldBeRunning: Boolean = false,
 )
 
 @HiltViewModel
@@ -44,7 +46,13 @@ class MainViewModel @Inject constructor(
 
         viewModelScope.launch {
             settingsRepository.serviceEnabledFlow.collect { enabled ->
-                _uiState.update { it.copy(serviceRunning = enabled) }
+                _uiState.update { it.copy(serviceShouldBeRunning = enabled) }
+            }
+        }
+
+        viewModelScope.launch {
+            BubbleService.isRunning.collect { running ->
+                _uiState.update { it.copy(serviceRunning = running) }
             }
         }
 
@@ -79,9 +87,24 @@ class MainViewModel @Inject constructor(
     fun refreshState(context: Context) {
         refreshVolumes()
         checkOverlayPermission(context)
+        checkBatteryOptimization(context)
+        
+        // Auto-restart if system killed it but user wants it on
+        if (_uiState.value.serviceShouldBeRunning && !_uiState.value.serviceRunning) {
+            if (_uiState.value.overlayPermissionGranted) {
+                BubbleService.start(context)
+            }
+        }
+
         if (_uiState.value.needsDndAccess && volumeManager.isNotificationPolicyGranted()) {
             _uiState.update { it.copy(needsDndAccess = false) }
         }
+    }
+
+    private fun checkBatteryOptimization(context: Context) {
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        val optimized = !powerManager.isIgnoringBatteryOptimizations(context.packageName)
+        _uiState.update { it.copy(isBatteryOptimized = optimized) }
     }
 
     fun setVolume(streamType: StreamType, value: Int) {
