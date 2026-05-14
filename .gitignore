@@ -1,9 +1,26 @@
-# Project exclude paths
-/.gradle/
-/app/build/
-/app/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/
+# Built objects
+/build/
+/*/build/
+*.pyc
 
-# Signing files
+# Gradle
+.gradle/
+local.properties
+
+# Signing
 *.jks
 *.keystore
 google-services.json
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+
+# Mac
+.DS_Store
+
+# Misc
+captures/
+.externalNativeBuild/
+.cxx/
