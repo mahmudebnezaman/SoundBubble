@@ -29,6 +29,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +39,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -124,7 +127,7 @@ fun BubbleSettingsScreen(
                     )
                 }
 
-                // Right pane: Sliders + Color picker
+                // Right pane: Sliders + Color picker + Behaviour + Reset
                 Column(
                     modifier = Modifier
                         .weight(0.58f)
@@ -135,6 +138,10 @@ fun BubbleSettingsScreen(
                     BubbleSliders(settings = settings, viewModel = viewModel)
                     Spacer(modifier = Modifier.height(20.dp))
                     BubbleColorPicker(settings = settings, viewModel = viewModel)
+                    Spacer(modifier = Modifier.height(28.dp))
+                    BubbleBehaviourSection(settings = settings, viewModel = viewModel)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    ResetToDefaultButton(viewModel = viewModel)
                 }
             }
         } else {
@@ -156,6 +163,10 @@ fun BubbleSettingsScreen(
                 )
                 Spacer(modifier = Modifier.height(28.dp))
                 BubbleColorPicker(settings = settings, viewModel = viewModel)
+                Spacer(modifier = Modifier.height(28.dp))
+                BubbleBehaviourSection(settings = settings, viewModel = viewModel)
+                Spacer(modifier = Modifier.height(20.dp))
+                ResetToDefaultButton(viewModel = viewModel)
                 Spacer(modifier = Modifier.height(40.dp))
             }
         }
@@ -495,6 +506,97 @@ private fun ShapeSelector(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BubbleBehaviourSection(
+    settings: BubbleSettings,
+    viewModel: BubbleSettingsViewModel,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+        ),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Text(
+                text = "BEHAVIOUR",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 1.5.sp,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Auto-fade on inactivity",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "Dims bubble after 4s of no touch",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Switch(
+                    checked = settings.inactivityFadeEnabled,
+                    onCheckedChange = { viewModel.setInactivityFadeEnabled(it) },
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Lock bubble position",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "Prevents accidental repositioning",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Switch(
+                    checked = settings.lockPosition,
+                    onCheckedChange = { viewModel.setLockPosition(it) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResetToDefaultButton(viewModel: BubbleSettingsViewModel) {
+    Button(
+        onClick = { viewModel.resetToDefaults() },
+        modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        ),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Text(
+            text = "Reset to Default",
+            style = MaterialTheme.typography.labelLarge,
+        )
     }
 }
 

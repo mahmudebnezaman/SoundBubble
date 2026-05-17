@@ -7,6 +7,7 @@ import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
@@ -62,7 +63,10 @@ class BubbleView(
     var buttonThickness: Float = 0.5f
 
     private var configuredOpacity: Float = 1.0f
-    private var snappedToRight = false
+    var snappedToRight = false
+        private set
+    private var inactivityFadeEnabled: Boolean = true
+    private var lockPosition: Boolean = false
 
     private val inactivityHandler = Handler(Looper.getMainLooper())
     private var fadeOutRunnable: Runnable? = null
@@ -72,6 +76,17 @@ class BubbleView(
 
     private val screenWidth: Int
         get() = resources.displayMetrics.widthPixels
+
+    private val navBarHeight: Int
+        get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            wm.currentWindowMetrics.windowInsets
+                .getInsets(android.view.WindowInsets.Type.navigationBars()).bottom
+        } else {
+            val resourceId = context.resources
+                .getIdentifier("navigation_bar_height", "dimen", "android")
+            if (resourceId > 0) context.resources.getDimensionPixelSize(resourceId) else 0
+        }
 
     // Width of the vertical pill in px — used both for drawing and half-visible slide calculation
     private val pillWidthPx: Float
@@ -105,9 +120,12 @@ class BubbleView(
         activeSlideAnimator?.cancel()
         bubbleShape = shape
         invalidate()
-        // Reset to active edge so the service's wasAtLeftEdge/wasAtRightEdge check passes
-        // correctly. This also fixes BUTTON-half-visible → CIRCLE showing half off-screen.
-        layoutParams.x = if (snappedToRight) {
+        // If the button slide-out animation left the bubble partially off-screen, snap it
+        // back to whichever edge it's on. Use the current params.x sign rather than
+        // screenWidth from displayMetrics — displayMetrics can be stale during rotation
+        // and would corrupt the x that BubbleService is about to set.
+        val atRight = layoutParams.x > 0
+        layoutParams.x = if (atRight) {
             screenWidth - layoutParams.width + visualPadding.toInt()
         } else {
             -visualPadding.toInt()
@@ -119,6 +137,24 @@ class BubbleView(
     fun updateThickness(thickness: Float) {
         buttonThickness = thickness.coerceIn(0.3f, 0.7f)
         invalidate()
+    }
+
+    fun updateInactivityFadeEnabled(enabled: Boolean) {
+        inactivityFadeEnabled = enabled
+        if (!enabled) {
+            cancelInactivityAnimations()
+            alpha = configuredOpacity
+        } else {
+            scheduleInactivityFade()
+        }
+    }
+
+    fun updateLockPosition(locked: Boolean) {
+        lockPosition = locked
+    }
+
+    fun setSnappedToRight(right: Boolean) {
+        snappedToRight = right
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -202,13 +238,16 @@ class BubbleView(
                 val dx = event.rawX - initialTouchX
                 val dy = event.rawY - initialTouchY
                 if (!hasMoved && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
+                    if (lockPosition) return true  // block drag; tap still works on ACTION_UP
                     hasMoved = true
                     activeSlideAnimator?.cancel()  // drag overrides the slide-back
                     animate().scaleX(1.05f).scaleY(1.05f).setDuration(100).start()
                 }
                 if (hasMoved) {
+                    val screenHeight = context.resources.displayMetrics.heightPixels
+                    val maxY = screenHeight - height - navBarHeight
                     layoutParams.x = initialX + dx.toInt()
-                    layoutParams.y = initialY + dy.toInt()
+                    layoutParams.y = (initialY + dy.toInt()).coerceIn(0, maxY)
                     updateViewLayout()
                 }
                 return true
@@ -268,6 +307,7 @@ class BubbleView(
 
     private fun scheduleInactivityFade() {
         cancelInactivityAnimations()
+        if (!inactivityFadeEnabled) return
         fadeOutRunnable = Runnable { animateToInactive() }
         inactivityHandler.postDelayed(fadeOutRunnable!!, 4000L)
     }
