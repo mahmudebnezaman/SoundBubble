@@ -53,4 +53,22 @@ class BubbleSettingsViewModel @Inject constructor(
             settingsRepository.setButtonThickness(value)
         }
     }
+
+    fun setInactivityFadeEnabled(value: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setInactivityFadeEnabled(value)
+        }
+    }
+
+    fun setLockPosition(value: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setLockPosition(value)
+        }
+    }
+
+    fun resetToDefaults() {
+        viewModelScope.launch {
+            settingsRepository.resetToDefaults()
+        }
+    }
 }

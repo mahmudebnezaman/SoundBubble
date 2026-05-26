@@ -133,6 +133,30 @@ class VolumeManager @Inject constructor(
         }
     }
 
+    private var savedRingVolume: Int = -1
+
+    fun silenceRinger() {
+        try {
+            savedRingVolume = audioManager.getStreamVolume(AudioManager.STREAM_RING)
+            audioManager.setStreamVolume(AudioManager.STREAM_RING, 0, 0)
+        } catch (e: SecurityException) {
+            // Cannot modify ring stream
+        }
+    }
+
+    fun restoreRingVolumeIfSilenced() {
+        val saved = savedRingVolume
+        if (saved < 0) return
+        savedRingVolume = -1
+        try {
+            audioManager.setStreamVolume(AudioManager.STREAM_RING, saved, 0)
+        } catch (e: SecurityException) {
+            // Cannot modify ring stream
+        }
+    }
+
+    fun isRinging(): Boolean = audioManager.mode == AudioManager.MODE_RINGTONE
+
     private inner class VolumeChangeObserver(
         handler: Handler,
     ) : ContentObserver(handler) {

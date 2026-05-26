@@ -54,6 +54,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -87,6 +88,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.codezamlabs.soundbubble.audio.StreamType
+import com.codezamlabs.soundbubble.service.BubbleService
 import com.codezamlabs.soundbubble.ui.screens.BatteryOptimizationScreen
 import com.codezamlabs.soundbubble.ui.screens.BubbleSettingsScreen
 import com.codezamlabs.soundbubble.ui.screens.PermissionGuideScreen
@@ -426,6 +428,15 @@ fun MainScreen(
                         onStop = { viewModel.stopBubbleService(context) },
                         onRequestPermission = onNavigateToPermission,
                     )
+                    if (uiState.serviceRunning) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = { BubbleService.reposition(context) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Reposition Bubble")
+                        }
+                    }
                 }
 
                 // Right pane: volume sliders
@@ -661,6 +672,17 @@ fun MainScreen(
                         onRequestPermission = onNavigateToPermission,
                         modifier = Modifier.padding(horizontal = 20.dp),
                     )
+                    if (uiState.serviceRunning) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = { BubbleService.reposition(context) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp),
+                        ) {
+                            Text("Reposition Bubble")
+                        }
+                    }
                 }
             }
         }

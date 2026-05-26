@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
@@ -44,9 +45,22 @@ class BubbleService : Service() {
     private var bubbleView: BubbleView? = null
     private var layoutParams: WindowManager.LayoutParams? = null
 
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val restoreVolumeRunnable = object : Runnable {
+        override fun run() {
+            if (volumeManager.isRinging()) {
+                mainHandler.postDelayed(this, 300)
+            } else {
+                volumeManager.restoreRingVolumeIfSilenced()
+            }
+        }
+    }
+
     companion object {
+        private const val TAG = "SoundBubble"
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "bubble_channel"
+        const val ACTION_REPOSITION = "com.codezamlabs.soundbubble.ACTION_REPOSITION"
 
         private val _isRunning = kotlinx.coroutines.flow.MutableStateFlow(false)
         val isRunning = _isRunning.asStateFlow()
@@ -63,6 +77,17 @@ class BubbleService : Service() {
         fun stop(context: Context) {
             context.stopService(Intent(context, BubbleService::class.java))
         }
+
+        fun reposition(context: Context) {
+            val intent = Intent(context, BubbleService::class.java).apply {
+                action = ACTION_REPOSITION
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -78,12 +103,111 @@ class BubbleService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_REPOSITION) {
+            repositionToSafe()
+        }
         return START_STICKY
+    }
+
+    private fun getNavBarHeight(): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            windowManager!!.currentWindowMetrics.windowInsets
+                .getInsets(android.view.WindowInsets.Type.navigationBars()).bottom
+        } else {
+            val resourceId = resources
+                .getIdentifier("navigation_bar_height", "dimen", "android")
+            if (resourceId > 0) resources.getDimensionPixelSize(resourceId) else 0
+        }
+    }
+
+    private fun repositionToSafe() {
+        val params = layoutParams ?: return
+        val view = bubbleView ?: return
+        val density = resources.displayMetrics.density
+        val visualPaddingPx = (12 * density).toInt()
+        val screenHeight = resources.displayMetrics.heightPixels
+        val navBarHeight = getNavBarHeight()
+        params.x = -visualPaddingPx
+        params.y = (screenHeight * 0.3f).toInt()
+            .coerceIn(0, screenHeight - params.height - navBarHeight)
+        bubbleView?.setSnappedToRight(false)
+        try {
+            windowManager?.updateViewLayout(view, params)
+            serviceScope.launch { settingsRepository.setPosition(params.x, params.y) }
+        } catch (e: IllegalArgumentException) { }
     }
 
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
-        repositionBubbleForNewOrientation()
+        // Delay 100 ms so Display.getRealMetrics() and currentWindowMetrics both reflect
+        // the new orientation before we calculate the new bubble position.
+        mainHandler.postDelayed({ repositionBubbleForNewOrientation() }, 100)
+    }
+
+    /**
+     * Returns the true physical screen size in pixels.
+     * getRealMetrics() always gives the full physical display dimensions, which matches the
+     * coordinate space of a TYPE_APPLICATION_OVERLAY window with FLAG_LAYOUT_IN_SCREEN —
+     * unlike currentWindowMetrics.bounds which may return app-content-area bounds
+     * (e.g. excluding a side nav bar) and would produce wrong snap positions.
+     */
+    @Suppress("DEPRECATION")
+    private fun getPhysicalScreenSize(): Pair<Int, Int> {
+        val wm = windowManager ?: return Pair(
+            resources.displayMetrics.widthPixels,
+            resources.displayMetrics.heightPixels,
+        )
+        val realMetrics = android.util.DisplayMetrics()
+        wm.defaultDisplay.getRealMetrics(realMetrics)
+        Log.d(TAG, "getPhysicalScreenSize: real=${realMetrics.widthPixels}x${realMetrics.heightPixels} " +
+            "dm=${resources.displayMetrics.widthPixels}x${resources.displayMetrics.heightPixels}")
+        return Pair(realMetrics.widthPixels, realMetrics.heightPixels)
+    }
+
+    /**
+     * Returns nav bar insets (left, right, bottom) for the current orientation.
+     *
+     * Primary source: currentWindowMetrics.windowInsets — correct for most devices.
+     * Fallback: Display.rotation + system resource dimensions — used when the primary
+     * source returns all-zero (can happen with some 3-button-nav overlay window contexts).
+     */
+    @Suppress("DEPRECATION")
+    private fun getNavInsets(): Triple<Int, Int, Int> {
+        val wm = windowManager ?: return Triple(0, 0, 0)
+
+        var navLeft = 0; var navRight = 0; var navBottom = 0
+        var insetsSource = "none"
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val insets = wm.currentWindowMetrics.windowInsets
+                .getInsets(android.view.WindowInsets.Type.navigationBars())
+            navLeft   = insets.left
+            navRight  = insets.right
+            navBottom = insets.bottom
+            insetsSource = "currentWindowMetrics"
+            Log.d(TAG, "getNavInsets currentWindowMetrics → left=$navLeft right=$navRight bottom=$navBottom")
+        }
+
+        // Fallback: if insets came back all-zero, derive from rotation + system resources.
+        // ROTATION_90  = physical bottom → RIGHT side in landscape → navRight
+        // ROTATION_270 = physical bottom → LEFT  side in landscape → navLeft
+        if (navLeft == 0 && navRight == 0 && navBottom == 0) {
+            val sideRes = resources.getIdentifier("navigation_bar_width", "dimen", "android")
+            val btmRes  = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+            val navSide = if (sideRes > 0) resources.getDimensionPixelSize(sideRes) else 0
+            val navBtm  = if (btmRes  > 0) resources.getDimensionPixelSize(btmRes)  else 0
+            val rotation = wm.defaultDisplay.rotation
+            Log.d(TAG, "getNavInsets fallback → rotation=$rotation navSide=$navSide navBtm=$navBtm sideRes=$sideRes btmRes=$btmRes")
+            when (rotation) {
+                android.view.Surface.ROTATION_90  -> navRight  = navSide
+                android.view.Surface.ROTATION_270 -> navLeft   = navSide
+                else                              -> navBottom = navBtm
+            }
+            insetsSource = "fallback rotation=$rotation"
+        }
+
+        Log.d(TAG, "getNavInsets FINAL source=$insetsSource → left=$navLeft right=$navRight bottom=$navBottom")
+        return Triple(navLeft, navRight, navBottom)
     }
 
     private fun repositionBubbleForNewOrientation() {
@@ -91,31 +215,36 @@ class BubbleService : Service() {
         val view = bubbleView ?: return
         val params = layoutParams ?: return
 
-        val displayMetrics = resources.displayMetrics
-        val newScreenWidth = displayMetrics.widthPixels
-        val newScreenHeight = displayMetrics.heightPixels
-        val density = displayMetrics.density
+        val density = resources.displayMetrics.density
         val visualPaddingPx = (12 * density).toInt()
 
-        // 1. Maintain horizontal snapping
-        // Use a threshold to see which side it was closer to
-        val wasOnRight = params.x + params.width / 2 > newScreenHeight / 2 // ScreenHeight because width/height swapped
+        val (newScreenWidth, newScreenHeight) = getPhysicalScreenSize()
+        val (navLeft, navRight, navBottom) = getNavInsets()
 
-        if (wasOnRight) {
-            params.x = newScreenWidth - params.width + visualPaddingPx
+        val wasOnRight = params.x > 0
+
+        @Suppress("DEPRECATION")
+        val rotation = windowManager?.defaultDisplay?.rotation ?: -1
+        Log.d(TAG, "repositionForOrientation: rotation=$rotation oldX=${params.x} wasOnRight=$wasOnRight " +
+            "physW=$newScreenWidth physH=$newScreenHeight " +
+            "navL=$navLeft navR=$navRight navB=$navBottom " +
+            "density=$density visualPaddingPx=$visualPaddingPx bubbleW=${params.width}")
+
+        params.x = if (wasOnRight) {
+            newScreenWidth - navRight - params.width + visualPaddingPx
         } else {
-            params.x = -visualPaddingPx
+            navLeft - visualPaddingPx
         }
 
-        // 2. Maintain vertical position within bounds
-        params.y = params.y.coerceIn(0, newScreenHeight - params.height)
+        params.y = params.y.coerceIn(0, newScreenHeight - params.height - navBottom)
+
+        bubbleView?.setSnappedToRight(wasOnRight)
+
+        Log.d(TAG, "repositionForOrientation: newX=${params.x} newY=${params.y}")
 
         try {
             wm.updateViewLayout(view, params)
-            // Save the new corrected position
-            serviceScope.launch {
-                settingsRepository.setPosition(params.x, params.y)
-            }
+            serviceScope.launch { settingsRepository.setPosition(params.x, params.y) }
         } catch (e: IllegalArgumentException) {
             // View not attached
         }
@@ -124,6 +253,8 @@ class BubbleService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         _isRunning.value = false
+        mainHandler.removeCallbacks(restoreVolumeRunnable)
+        volumeManager.restoreRingVolumeIfSilenced()
         removeBubble()
         serviceScope.cancel()
     }
@@ -170,7 +301,7 @@ class BubbleService : Service() {
     private fun createBubble() {
         val wm = windowManager ?: return
         val density = resources.displayMetrics.density
-        
+
         // Add padding to the window size to accommodate the shadow blur
         val visualPaddingPx = (12 * density).toInt()
         val shadowPaddingPx = visualPaddingPx * 2
@@ -198,7 +329,15 @@ class BubbleService : Service() {
             context = this,
             windowManager = wm,
             layoutParams = params,
-            onTap = { volumeManager.showSystemVolumePanel() },
+            onTap = {
+                if (volumeManager.isRinging()) {
+                    volumeManager.silenceRinger()
+                    mainHandler.removeCallbacks(restoreVolumeRunnable)
+                    mainHandler.postDelayed(restoreVolumeRunnable, 300)
+                } else {
+                    volumeManager.showSystemVolumePanel()
+                }
+            },
             onDragEnd = { x, y ->
                 serviceScope.launch {
                     settingsRepository.setPosition(x, y)
@@ -233,50 +372,72 @@ class BubbleService : Service() {
                 val visualPaddingPx = (12 * density).toInt()
                 val shadowPaddingPx = visualPaddingPx * 2
                 val sizePx = (settings.size * density).toInt() + shadowPaddingPx
-                val screenWidth = resources.displayMetrics.widthPixels
+
+                // Use the same physical-screen source as repositionBubbleForNewOrientation()
+                // so the wasAtRightEdge check always sees the position that was just saved.
+                val (physicalWidth, _) = getPhysicalScreenSize()
+                val screenWidth = physicalWidth
+                val (navLeft, navRight, _) = getNavInsets()
+
+                // Capture before bubbleView.apply so that updateShape() — which modifies
+                // layoutParams.x using stale displayMetrics — cannot corrupt these values.
+                val oldWidth = layoutParams?.width ?: 0
+                val oldX     = layoutParams?.x     ?: 0
+                Log.d(TAG, "observeSettings: screenWidth=$screenWidth navL=$navLeft navR=$navRight oldX=$oldX oldWidth=$oldWidth posX=${settings.positionX}")
 
                 bubbleView?.apply {
                     updateColor(settings.color)
                     updateOpacity(settings.opacity)
                     updateShape(settings.shape)
                     updateThickness(settings.buttonThickness)
+                    updateInactivityFadeEnabled(settings.inactivityFadeEnabled)
+                    updateLockPosition(settings.lockPosition)
                 }
 
                 layoutParams?.let { params ->
-                    val oldWidth = params.width
-                    val oldX = params.x
-                    
-                    // Detect if it was snapped to either edge before the size change
-                    val wasAtRightEdge = oldWidth > 0 && 
-                        Math.abs(oldX - (screenWidth - oldWidth + visualPaddingPx)) < 15
-                    val wasAtLeftEdge = oldWidth > 0 && 
-                        Math.abs(oldX - (-visualPaddingPx)) < 15
+                    // Edge snap positions account for side nav bars (3-button nav in landscape).
+                    val rightEdgeX = screenWidth - navRight - oldWidth + visualPaddingPx
+                    val leftEdgeX  = navLeft - visualPaddingPx
+
+                    val wasAtRightEdge = oldWidth > 0 && Math.abs(oldX - rightEdgeX) < 15
+                    val wasAtLeftEdge  = oldWidth > 0 && Math.abs(oldX - leftEdgeX)  < 15
+
+                    Log.d(TAG, "observeSettings edge check: rightEdgeX=$rightEdgeX leftEdgeX=$leftEdgeX " +
+                        "wasAtRightEdge=$wasAtRightEdge wasAtLeftEdge=$wasAtLeftEdge sizePx=$sizePx")
 
                     params.width = sizePx
                     params.height = sizePx
 
+                    val onRight: Boolean
                     when {
                         wasAtRightEdge -> {
-                            // Keep attached to right edge
-                            params.x = screenWidth - sizePx + visualPaddingPx
+                            params.x = screenWidth - navRight - sizePx + visualPaddingPx
+                            onRight = true
                         }
                         wasAtLeftEdge || settings.positionX == 0 -> {
-                            // Keep attached to left edge
-                            params.x = -visualPaddingPx
+                            params.x = navLeft - visualPaddingPx
+                            onRight = false
                         }
                         else -> {
-                            // Grow from current position if in the middle
                             params.x = settings.positionX
+                            // Free-floating: the saved x is definitive — positive means right side
+                            onRight = params.x > 0
                         }
                     }
-                    
+
+                    // Sync BubbleView's snappedToRight. We track it explicitly from the branch
+                    // taken above rather than using params.x > 0, because when navLeft > 0
+                    // (side nav bar in landscape), the left-snap position is positive too.
+                    bubbleView?.setSnappedToRight(onRight)
+                    Log.d(TAG, "observeSettings: final params.x=${params.x} onRight=$onRight")
+
                     // Update repository if the coordinate changed to keep it synced
                     if (params.x != settings.positionX) {
                         serviceScope.launch {
                             settingsRepository.setPosition(params.x, settings.positionY)
                         }
                     }
-                    
+
                     params.y = settings.positionY
                     params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or

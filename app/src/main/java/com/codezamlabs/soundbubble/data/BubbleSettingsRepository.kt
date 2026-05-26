@@ -1,6 +1,7 @@
 package com.codezamlabs.soundbubble.data
 
 import android.content.Context
+import android.content.res.Resources
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -26,6 +27,8 @@ data class BubbleSettings(
     val serviceEnabled: Boolean = false,
     val shape: BubbleShape = BubbleShape.CIRCLE,
     val buttonThickness: Float = 0.5f,
+    val inactivityFadeEnabled: Boolean = true,
+    val lockPosition: Boolean = false,
 )
 
 @Singleton
@@ -41,6 +44,8 @@ class BubbleSettingsRepository @Inject constructor(
         val SERVICE_ENABLED = booleanPreferencesKey("service_enabled")
         val BUBBLE_SHAPE = stringPreferencesKey("bubble_shape")
         val BUTTON_THICKNESS = floatPreferencesKey("button_thickness")
+        val INACTIVITY_FADE_ENABLED = booleanPreferencesKey("inactivity_fade_enabled")
+        val LOCK_POSITION = booleanPreferencesKey("lock_position")
     }
 
     val settingsFlow: Flow<BubbleSettings> = context.bubbleDataStore.data.map { prefs ->
@@ -55,6 +60,8 @@ class BubbleSettingsRepository @Inject constructor(
                 BubbleShape.valueOf(prefs[Keys.BUBBLE_SHAPE] ?: BubbleShape.CIRCLE.name)
             }.getOrDefault(BubbleShape.CIRCLE),
             buttonThickness = prefs[Keys.BUTTON_THICKNESS] ?: 0.5f,
+            inactivityFadeEnabled = prefs[Keys.INACTIVITY_FADE_ENABLED] ?: true,
+            lockPosition = prefs[Keys.LOCK_POSITION] ?: false,
         )
     }
 
@@ -95,9 +102,32 @@ class BubbleSettingsRepository @Inject constructor(
     }
 
     suspend fun setPosition(x: Int, y: Int) {
+        val screenH = Resources.getSystem().displayMetrics.heightPixels
         context.bubbleDataStore.edit {
             it[Keys.BUBBLE_X] = x
-            it[Keys.BUBBLE_Y] = y
+            it[Keys.BUBBLE_Y] = y.coerceIn(0, screenH)
+        }
+    }
+
+    suspend fun setInactivityFadeEnabled(value: Boolean) {
+        context.bubbleDataStore.edit { it[Keys.INACTIVITY_FADE_ENABLED] = value }
+    }
+
+    suspend fun setLockPosition(value: Boolean) {
+        context.bubbleDataStore.edit { it[Keys.LOCK_POSITION] = value }
+    }
+
+    suspend fun resetToDefaults() {
+        context.bubbleDataStore.edit { prefs ->
+            prefs[Keys.BUBBLE_OPACITY] = 0.5f
+            prefs[Keys.BUBBLE_SIZE] = 60f
+            prefs[Keys.BUBBLE_COLOR] = 0xFF1E293B.toInt()
+            prefs[Keys.BUBBLE_X] = 0
+            prefs[Keys.BUBBLE_Y] = 200
+            prefs[Keys.BUBBLE_SHAPE] = BubbleShape.CIRCLE.name
+            prefs[Keys.BUTTON_THICKNESS] = 0.5f
+            prefs[Keys.INACTIVITY_FADE_ENABLED] = true
+            prefs[Keys.LOCK_POSITION] = false
         }
     }
 
